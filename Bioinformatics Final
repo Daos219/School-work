@@ -1,0 +1,246 @@
+#Written by Dan Ferber
+#formatString takes a sequence in, crops out all numbers, new lines, spaces,
+#and anything else not a letter
+def formatString(dna):
+    output = ""
+    dna.lower()
+    for x in xrange(len(dna)):
+        if(dna[x] >= 'a' and dna[x] <= 'z'):
+            output = output + dna[x]
+    return output
+
+#findGenes takes in a formatted string of characters, and makes a list of
+#tuples; each one contains in order: start, stop, and length
+#first this function makes a list of each start codon in the sequence.
+#next it makes a list of each stop position. This is done with three loops,
+#one for each stop codon. The stop codon list is then sorted
+#Next this function runs through both lists, finding the
+#appropriate stop for each start. Using this information,
+#a tuple is generated as described above and appended to
+#another list to be returned
+def findGenes(dna):
+    output = []
+    startList = []
+    index = 0
+    while(index != -1):
+        index = dna.find("atg", index + 1)
+        if(index != -1):
+            startList.append(index)
+    endList = []
+    index = 0
+    while(index != -1):
+        index = dna.find("taa", index + 1)
+        if(index != -1):
+            endList.append(index)
+    index = 0
+    while(index != -1):
+        index = dna.find("tag", index + 1)
+        if(index != -1):
+            endList.append(index)
+    index = 0
+    while(index != -1):
+        index = dna.find("tga", index + 1)
+        if(index != -1):
+            endList.append(index)
+    endList.sort()
+    x = 0
+    y = 0
+    while(x < len(startList)):
+        found = 0
+        y = 0
+        while((y < len(endList) and found == 0)):
+            if((startList[x] < endList[y]) and (((endList[y] - startList[x]) %3) == 0)):
+                myTuple = (startList[x], endList[y], endList[y] - startList[x])
+                output.append(myTuple)
+                found = 1
+                x += 1
+            y += 1
+        if(found != 1):
+            x += 1
+
+    return output
+
+#This function is to recalculate the start and stop
+#positions for the list found in the complement
+#reverse. This algorithm takes each start and stop
+#position, swaps them and makes the proper adjustment
+def recalculateCR(inList, len):
+    i = 0
+    outList = []
+    for i in inList:
+        realStart = ((len-1) - (i[1]+2))
+        realEnd = ((len-1) - (i[0]+2))
+        length = i[2]
+        promoter = i[3]
+        outTuple = (realStart, realEnd, length, promoter)
+        outList.append(outTuple)
+    return outList
+
+#This function simply switches a to t, t to a
+#c to g, and g to c
+def transcribe(dna):
+    dict = {'a' : 't', 't' : 'a', 'c' : 'g', 'g' : 'c'}
+    rna = []
+    rna = ''.join(dict[x] for x in dna)
+    return rna
+
+#Reverse a string
+def reverseString(dna):
+    reversed = dna[::-1]
+    return reversed
+
+#This function spilts a list of tuples based on the
+#length of the string it represents, first it sorts
+#tuple by length(the third attribute) and then checking
+#the length, if the length is less than 300 it puts
+#the tuple in the pseudo list, otherwise it puts the
+#tuple in the potent list
+def split(tupleList):
+    tupleList.sort(key = lambda tup: tup[2])
+    pseudoList = []
+    potentList = []
+    for i in tupleList:
+        if(i[2] < 300):
+            pseudoList.append(i)
+        else:
+            potentList.append(i)
+    return pseudoList, potentList
+
+#Calculate promoter score based on the given
+#promoter list, this function was handed to the
+#class, but I changed it to return a new list
+#of tuples with the same attributes, plus the
+#promoter score
+def promoter(inList, dna):
+    outList = []
+    promoter = 'tgxtattaa'
+    startList = []
+    for i in inList:
+        startList.append(i[0])
+    startList.sort()
+    for i in xrange(len(startList)):
+        dnaSub = dna[startList[i]-14:startList[i]-6+1]
+        score = 1
+        j = 0
+        while (j <= 8):
+            if(j != 2):
+                if(promoter[j] == dnaSub[j]):
+                    score += 1
+            j += 1
+        percent = (score/9.0) * 100
+        percent -= (score/9.0)
+        newTuple = (inList[i][0], inList[i][1], inList[i][2], percent)
+        outList.append(newTuple)
+    return outList
+        
+    
+    
+def main():
+    #open input file and get the string it contains
+    dnaInputFile = open('input.txt', 'r')
+    dna = dnaInputFile.read()
+    #three output files, one for the string outputs,
+    #one for the pseudogenes, and one for potential genes
+    outputFile = open('output.txt', 'w')
+    pseudoFile = open('pseudo.txt', 'w')
+    potentFile = open('potent.txt', 'w')
+
+    #format the string and write to file
+    formatted = formatString(dna)
+    outputFile.write("Formatted text:\n")
+    outputFile.write(formatted)
+
+    #get complement reverse and write to file
+    complement = transcribe(formatted)
+    reverse = reverseString(complement)
+    outputFile.write("\n\nComplement reverse of sequence:\n")
+    outputFile.write(reverse)
+
+    #create tuple list using findGenes function, add
+    #promoter score, sort by length, and
+    #split into pseudo and potential genes
+    tupleList = findGenes(formatted)
+    pList = promoter(tupleList, formatted)
+    pList.sort(key = lambda tup: tup[2])
+    pseudoList, potentList = split(pList)
+
+    #create tuple list for complement reverse string using
+    #findGenes function, add promoter score, sort by length,
+    #recalculate start and stop positions,
+    #and split into pseudo and potential genes
+    complementList = findGenes(reverse)
+    pCompList = promoter(complementList, reverse)
+    pCompList.sort(key = lambda tup: tup[2])
+    realComplementList = recalculateCR(pCompList, len(reverse))
+    cpseudoList, cpotentList = split(realComplementList)
+
+    #output to pseudogene file, formatted nicely, the list of pseudogenes on main strand
+    pseudoFile.write("\n\nList of  positions and lengths (pseudogenes on main strand):\n")
+    pseudoFile.write("Number,\tStart,\tEnd,\t\tLength,\tPromoter score\n")
+    j = 1
+    for i in pseudoList:
+        line = str(j) + ",\t\t"
+        for x in range(4):
+            line = line + str(i[x]) + ",\t"
+            if((len(str(i[x])) < 5) and (x != 3)):
+                line = line + "\t"
+        l = len(line) - 2
+        line = line[0:l]
+        pseudoFile.write(line + '\n')
+        j += 1
+
+    #output to potential gene file, formatted nicely, the list of potential genes on main strand
+    potentFile.write("\n\nList of  positions and lengths(potential genes on main strand):\n")
+    potentFile.write("Number,\tStart,\tEnd,\t\tLength,\tPromoter score\n")
+    j = 1
+    for i in potentList:
+        line = str(j) + ",\t\t"
+        for x in range(4):
+            line = line + str(i[x]) + ",\t"
+            if((len(str(i[x])) < 5) and (x != 3)):
+                line = line + "\t"
+        l = len(line) - 2
+        line = line[0:l]
+        potentFile.write(line + '\n')
+        j += 1
+
+    #output to pseudogene file, formatted nicely, the list of pseudogenes on complement reverse strand
+    pseudoFile.write("\n\n\n\nList of  positions and lengths (pseudogenes on complement reverse):\n")
+    pseudoFile.write("Number,\tStart,\tEnd,\t\tLength,\tPromoter score\n")
+    j = 1
+    for i in cpseudoList:
+        line = str(j) + ",\t\t"
+        for x in range(4):
+            line = line + str(i[x]) + ",\t"
+            if((len(str(i[x])) < 5) and (x != 3)):
+                line = line + "\t"
+        l = len(line) - 2
+        line = line[0:l]
+        pseudoFile.write(line + '\n')
+        j += 1
+
+    #output to potential gene file, formatted nicely, the list of potential genes on
+    #complement reverse strand
+    potentFile.write("\n\n\n\nList of  positions and lengths(potential genes on complement reverse):\n")
+    potentFile.write("Number,\tStart,\tEnd,\t\tLength,\tPromoter score\n")
+    j = 1
+    for i in cpotentList:
+        line = str(j) + ",\t\t"
+        for x in range(4):
+            line = line + str(i[x]) + ",\t"
+            if((len(str(i[x])) < 5) and (x != 3)):
+                line = line + "\t"
+        l = len(line) - 2
+        line = line[0:l]
+        potentFile.write(line + '\n')
+        j += 1
+
+    
+    #close all files
+    dnaInputFile.close()
+    potentFile.close()
+    pseudoFile.close()
+    outputFile.close()
+
+
+main()
